@@ -152,16 +152,12 @@ const BD=[['🌱','بداية','أنجز مهمتك الأولى',()=>cnt('task:
 const TK='grit_timer_v1';
 const T={mode:'focus',len:{focus:25,short:5,long:15},left:1500,run:false,end:0,start:0,link:null};
 const MN={focus:'تركيز',short:'استراحة قصيرة',long:'استراحة طويلة'};
-const CK='grit_timer_cfg_v1',dur=m=>Math.max(5,Math.round(T.len[m]*60)),fmin=()=>Math.max(1,Math.round(dur('focus')/60));
-function cfgLoad(){try{const c=JSON.parse(localStorage.getItem(CK));if(c)for(const k of['focus','short','long'])if(+c[k]>=5&&+c[k]<=10800)T.len[k]=Math.round(+c[k])/60}catch(e){}}
-function cfgSave(){try{localStorage.setItem(CK,JSON.stringify({focus:dur('focus'),short:dur('short'),long:dur('long')}))}catch(e){}}
-cfgLoad();T.left=dur(T.mode);
 function tSave(){try{localStorage.setItem(TK,JSON.stringify({mode:T.mode,left:T.left,run:T.run,end:T.end,start:T.start,link:T.link}))}catch(e){}}
 function tRestore(){try{const r=JSON.parse(localStorage.getItem(TK));if(!r||!T.len[r.mode])return;T.mode=r.mode;T.link=r.link||null;T.start=+r.start||0;
  if(r.run&&r.end>0){T.run=true;T.end=+r.end;T.left=Math.max(0,Math.round((T.end-Date.now())/1000));if(T.left===0)fin(true)}
- else{T.run=false;T.left=Math.min(dur(T.mode),Math.max(1,+r.left||dur(T.mode)))}}catch(e){}}
-function setMode(m){if(T.run&&!confirm('إنهاء الجلسة الحالية؟'))return;T.mode=m;T.run=false;T.left=dur(m);T.start=0;tSave();render()}
-function paint(){const t=$('#tm');if(!t)return;t.textContent=p2(Math.floor(T.left/60))+':'+p2(T.left%60);$('#rg').style.strokeDashoffset=339.3*(1-T.left/(dur(T.mode)))}
+ else{T.run=false;T.left=Math.min(T.len[T.mode]*60,Math.max(1,+r.left||T.len[T.mode]*60))}}catch(e){}}
+function setMode(m){if(T.run&&!confirm('إنهاء الجلسة الحالية؟'))return;T.mode=m;T.run=false;T.left=T.len[m]*60;T.start=0;tSave();render()}
+function paint(){const t=$('#tm');if(!t)return;t.textContent=p2(Math.floor(T.left/60))+':'+p2(T.left%60);$('#rg').style.strokeDashoffset=339.3*(1-T.left/(T.len[T.mode]*60))}
 function tick(){if(!T.run)return;T.left=Math.max(0,Math.round((T.end-Date.now())/1000));if(T.left===0)return fin();paint()}
 let AC;
 function beep(){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();[0,.25,.5].forEach(x=>{const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime+x;o.frequency.value=880;o.connect(g);g.connect(AC.destination);g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.001,t+.2);o.start(t);o.stop(t+.22)})}catch(e){}}
@@ -169,8 +165,8 @@ function notify(m){try{if('Notification' in window&&Notification.permission==='g
 function tStart(){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();AC.resume&&AC.resume();if('Notification' in window&&Notification.permission==='default')Notification.requestPermission()}catch(e){}
  T.run=true;T.end=Date.now()+T.left*1000;if(!T.start)T.start=Date.now();tSave();render()}
 function tPause(){tick();T.run=false;tSave();render()}
-function tReset(){T.run=false;T.left=dur(T.mode);T.start=0;tSave();render()}
-function tEnd(){if(T.run)tick();const el=dur(T.mode)-T.left,L=T.link;
+function tReset(){T.run=false;T.left=T.len[T.mode]*60;T.start=0;tSave();render()}
+function tEnd(){if(T.run)tick();const el=T.len[T.mode]*60-T.left,L=T.link;
  if(T.mode==='focus'&&el>=60){const m=Math.floor(el/60);if(!confirm('إنهاء الجلسة وحفظ '+m+' دقيقة من التركيز؟'))return;record(m,false,L);tReset();if(L)afterFocus(L,m);else toast('تم حفظ الجلسة')}
  else{if(!confirm('إنهاء الجلسة؟'))return;tReset()}}
 function record(min,done,L,d){d=d||TD();S.focus.minutes+=min;S.focus.log[d]=(S.focus.log[d]||0)+min;
@@ -178,10 +174,9 @@ function record(min,done,L,d){d=d||TD();S.focus.minutes+=min;S.focus.log[d]=(S.f
  S.focus.hist.push({id:uid(),d,min,done,subj:L&&L.subj||null,less:L&&L.less||null,sid:L&&L.sid||null,t:Date.now()});
  if(S.focus.hist.length>500)S.focus.hist=S.focus.hist.slice(-500);save()}
 function fin(late){const L=T.link,m=T.mode;T.run=false;
- if(m==='focus'){record(fmin(),true,L,ymd(new Date(T.end||Date.now())));T.mode=S.focus.sessions%4===0?'long':'short';T.link=null}else T.mode='focus';
- T.left=dur(T.mode);T.start=0;tSave();if(!late)beep();notify(m==='focus'?'انتهت جلسة التركيز 🎉':'انتهت الاستراحة');
- try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}toast(m==='focus'?'انتهت جلسة التركيز 🎉':'انتهت الاستراحة');render();if(m==='focus'&&L)afterFocus(L,fmin());
- else modal(`<div style="text-align:center;padding:14px 0"><div style="font-size:46px">${m==='focus'?'🎉':'☕'}</div><h2 style="justify-content:center">${m==='focus'?'انتهى وقت التركيز':'انتهت الاستراحة'}</h2><button class="btn w" data-act="cm">حسنًا</button></div>`)}
+ if(m==='focus'){record(T.len.focus,true,L,ymd(new Date(T.end||Date.now())));T.mode=S.focus.sessions%4===0?'long':'short';T.link=null}else T.mode='focus';
+ T.left=T.len[T.mode]*60;T.start=0;tSave();if(!late)beep();notify(m==='focus'?'انتهت جلسة التركيز 🎉':'انتهت الاستراحة');
+ try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}toast(m==='focus'?'انتهت جلسة التركيز 🎉':'انتهت الاستراحة');render();if(m==='focus'&&L)afterFocus(L,T.len.focus)}
 setInterval(tick,500);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});window.addEventListener('pageshow',tick);
 
@@ -269,8 +264,7 @@ document.addEventListener('submit',e=>{e.preventDefault();if(e.target.dataset.pk
   const o={title,rep:rp,days,due:rp==='none'?(v.due||null):null,pri:PRI[v.pri]?v.pri:'medium',cat:CATS.includes(v.cat)?v.cat:'أخرى'};
   if(id){const t0=byId(S.tasks,id);o.log=t0.log||{};o.created=t0.created||TD();put(S.tasks,o)}else put(S.tasks,{...o,done:false,doneAt:null,log:{},created:TD()})}
  else if(k==='habit'){const o={title,type:v.type==='weekly'?'weekly':'daily',target:Math.min(7,Math.max(1,parseInt(v.target)||1))};if(id)put(S.habits,o);else put(S.habits,{...o,log:{},created:TD()})}
- else{const o={title,period:PER[v.period]?v.period:'weekly',date:v.date||null};if(id)put(S.goals,o);else{const g={id:uid(),...o,manual:0,ms:[]};S.goals.push(g);(v.ms||'').split('
-').map(s=>s.trim()).filter(Boolean).slice(0,20).forEach(t=>g.ms.push({id:uid(),t:t.slice(0,80),done:false}))}}
+ else{const o={title,period:PER[v.period]?v.period:'weekly',date:v.date||null};if(id)put(S.goals,o);else{const g={id:uid(),...o,manual:0,ms:[]};S.goals.push(g);(v.ms||'').split('\n').map(s=>s.trim()).filter(Boolean).slice(0,20).forEach(t=>g.ms.push({id:uid(),t:t.slice(0,80),done:false}))}}
  closeM();save();render()});
 
 /* ---------- الأحداث ---------- */
@@ -332,7 +326,7 @@ function setSt(id,d,st,force){const x=S.sess.find(s=>s.id===id);if(!x)return;con
  if(x.log[d]===st){if(force)return;delete x.log[d];if(L)L.revs=L.revs.filter(r=>!(r.sid===id&&r.d===d))}
  else{x.log[d]=st;if(L){L.revs=L.revs.filter(r=>!(r.sid===id&&r.d===d));if(st==='done'){L.revs.push({d,min:x.dur,sid:id});if(L.st==='new')L.st='prog'}}if(st==='done')award('sess:'+id+':'+d,10)}
  save();render()}
-function startFocus(L){if(T.run){toast('هناك جلسة تركيز جارية');tab='focus';render();return}T.mode='focus';T.left=dur('focus');T.start=0;T.link=L;tab='focus';tStart()}
+function startFocus(L){if(T.run){toast('هناك جلسة تركيز جارية');tab='focus';render();return}T.mode='focus';T.left=T.len.focus*60;T.start=0;T.link=L;tab='focus';tStart()}
 function afterFocus(L,min){PL.pend={L,min};modal(`<h2>انتهت جلسة التركيز (${min} د)</h2><div class="mu" style="margin-bottom:12px">${esc(lkName(L))}</div><b>هل أتممت المراجعة؟</b><div class="row" style="margin-top:14px"><button class="btn sp" data-act="p:fdone">نعم، تمت</button><button class="btn g sp" data-act="p:fprog">لا، أبقِها قيد المراجعة</button></div>`)}
 const pm=(pk,id,title,f,extra='')=>modal(`<form data-pk="${pk}" data-id="${id||''}" ${extra}><h2>${title}</h2>${f}<div class="row" style="margin-top:18px"><button class="btn sp">حفظ</button><button type="button" class="btn g" data-act="cm">إلغاء</button></div></form>`);
 function sForm(id,pre){const x=(id&&S.sess.find(s=>s.id===id))||pre||{};
@@ -383,14 +377,14 @@ function suggest(){const O=S.org,days=wkD(addD(new Date(),PL.pw*7)).filter(d=>d>
 function planHome(){const T0=TD(),os=occ(T0,null),dn=os.filter(o=>o.st==='done').length,nx=os.find(o=>!o.st&&tmn(o.x.start)+o.x.dur>nowMin()),late=lateList().length;
  if(!S.sess.length)return `<div class="card row"><div class="sp"><b>التخطيط الدراسي</b><div class="mu">نظّم جدول مراجعتك وابدأ جلسات تركيز مرتبطة بدروسك.</div></div><button class="btn sm" data-act="p:open">فتح</button></div>`;
  return `<div class="card"><div class="row"><b class="sp" data-act="p:open">مراجعة اليوم</b><span class="mu">${dn}/${os.length} • تركيز ${fm(S.focus.log[T0]||0)}</span></div><div style="margin:8px 0">${bar(os.length?Math.round(dn/os.length*100):0)}</div>${os.slice(0,3).map(o=>`<div class="mu">${o.x.start} ${esc(sname(o.x))} ${o.st==='done'?'✓':o.st==='missed'?'✗':''}</div>`).join('')}${nx?`<div class="row" style="margin-top:8px"><div class="sp"><b>القادمة: ${esc(sname(nx.x))}</b><div class="mu">${nx.x.start}</div></div><button class="btn sm" data-act="p:f" data-id="${nx.x.id}" data-d="${T0}">▶ ابدأ</button></div>`:`<div class="mu" style="margin-top:6px">لا حصص قادمة اليوم.</div>`}${late?`<div class="mu" style="color:var(--rd);margin-top:6px" data-act="p:open">${late} حصص بانتظار التأكيد — اضغط للمراجعة</div>`:''}</div>`}
-function vFocus(){const total=dur(T.mode),td=S.focus.log[TD()]||0,fresh=T.left===total,H=S.focus.hist.slice(-8).reverse();
+function vFocus(){const total=T.len[T.mode]*60,td=S.focus.log[TD()]||0,fresh=T.left===total,H=S.focus.hist.slice(-8).reverse();
  const lo=[['','بدون ربط'],...S.subjects.flatMap(s=>[[s.id+'|',s.name],...s.lessons.map(l=>[s.id+'|'+l.id,s.name+' — '+l.t])])],cur=T.link&&T.link.subj?T.link.subj+'|'+(T.link.less||''):'';
  return `<h1>التركيز</h1><div class="card" style="margin-top:12px;text-align:center"><div class="modes">${Object.keys(MN).map(k=>`<button class="${T.mode===k?'on':''}" data-act="md" data-id="${k}">${MN[k]}</button>`).join('')}</div>
  <div style="position:relative;width:230px;height:230px;margin:20px auto"><svg viewBox="0 0 120 120" width="230" height="230" style="transform:rotate(-90deg)"><circle cx="60" cy="60" r="54" fill="none" stroke="#efe8da" stroke-width="7"/><circle id="rg" cx="60" cy="60" r="54" fill="none" stroke="#5f7f66" stroke-width="7" stroke-linecap="round" stroke-dasharray="339.3" style="stroke-dashoffset:${339.3*(1-T.left/total)};transition:stroke-dashoffset .5s linear"/></svg><div id="tm" dir="ltr" style="position:absolute;inset:0;display:grid;place-items:center;font-size:46px;font-weight:700;font-variant-numeric:tabular-nums"></div></div>
  ${T.link?`<div class="mu" style="margin-bottom:8px">مرتبطة بـ: <b>${esc(lkName(T.link))}</b></div>`:''}
  <div class="row" style="justify-content:center;flex-wrap:wrap">${T.run?`<button class="btn" style="min-width:120px" data-act="tp">إيقاف مؤقت</button>`:`<button class="btn" style="min-width:120px" data-act="${fresh?'ts':'tres'}">${fresh?'ابدأ':'استئناف'}</button>`}${(!fresh||T.run)?`<button class="btn d" data-act="te">إنهاء</button>`:''}<button class="btn g" data-act="tr0">إعادة ضبط</button></div>
  <select data-fl="1" style="margin-top:12px" ${T.run?'disabled':''}>${opt(lo,cur)}</select><div class="mu" style="margin-top:6px">${T.run?'الوقت محسوب من الساعة الفعلية، فيستمر حسابه حتى لو خرجت من التطبيق. التنبيه يصدر عند عودتك إليه.':'اربط الجلسة بمادة أو درس (اختياري).'}</div></div>
- ${tcfg()}<div class="grid"><div class="card"><div class="big">${S.focus.sessions}</div><div class="mu">جلسات مكتملة</div></div><div class="card"><div class="big">${fm(S.focus.minutes)}</div><div class="mu">إجمالي وقت التركيز</div></div></div><div class="card mu">تركيز اليوم: ${fm(td)} • كل جلسة تركيز مكتملة تمنحك 15 نقطة.</div>
+ <div class="grid"><div class="card"><div class="big">${S.focus.sessions}</div><div class="mu">جلسات مكتملة</div></div><div class="card"><div class="big">${fm(S.focus.minutes)}</div><div class="mu">إجمالي وقت التركيز</div></div></div><div class="card mu">تركيز اليوم: ${fm(td)} • كل جلسة تركيز مكتملة تمنحك 15 نقطة.</div>
  ${H.length?`<h2>آخر الجلسات</h2><div class="card">${H.map(h=>`<div class="row" style="padding:5px 0"><span class="sp">${fd(h.d)} • ${h.subj?esc(lkName(h)):'تركيز حر'}</span><span class="tag">${h.min} د${h.done?'':' (مبكرة)'}</span></div>`).join('')}</div>`:''}`}
 
 document.addEventListener('submit',e=>{const f=e.target,pk=f.dataset.pk;if(!pk)return;e.preventDefault();const v=Object.fromEntries(new FormData(f)),id=f.dataset.id,fin_=()=>{closeM();save();render()};
@@ -399,13 +393,11 @@ document.addEventListener('submit',e=>{const f=e.target,pk=f.dataset.pk;if(!pk)r
  else if(pk==='lesn'){const sid=f.dataset.sid,t=(v.t||'').trim();if(!t){toast('اكتب عنوان الدرس');return}const o={t,st:ST[v.st]?v.st:'new',pri:PRI[v.pri]?v.pri:'medium',next:v.next||null,note:(v.note||'').trim()};
   if(id)Object.assign(lesn(sid,id),o);else subj(sid).lessons.push({id:uid(),...o,revs:[],created:TD()});PL.open[sid]=true;fin_()}
  else if(pk==='busy'){const t=(v.t||'').trim();if(!t||!v.from||!v.to||tmn(v.to)<=tmn(v.from)){toast('تحقق من الاسم والأوقات');return}S.busy.push({id:uid(),t,day:+v.day,from:v.from,to:v.to});fin_()}
- else if(pk==='pp'){const x=S.sess.find(s=>s.id===id),d=f.dataset.d;if(!x)return;const cf=conf(v.date,v.start,x.dur,id);if(cf.length&&!confirm('تتعارض مع: '+cf.join('، ')+'
-هل تريد المتابعة؟'))return;
+ else if(pk==='pp'){const x=S.sess.find(s=>s.id===id),d=f.dataset.d;if(!x)return;const cf=conf(v.date,v.start,x.dur,id);if(cf.length&&!confirm('تتعارض مع: '+cf.join('، ')+'\nهل تريد المتابعة؟'))return;
   if(x.rep==='none'){x.date=v.date;x.start=v.start;delete x.log[d]}else{x.log[d]='moved';S.sess.push({...x,id:uid(),rep:'none',until:null,date:v.date,start:v.start,log:{}})}fin_()}
  else if(pk==='sess'){const[sid,lid]=(v.lk||'').split('|'),title=(v.title||'').trim();if(!sid&&!title){toast('اختر مادة أو اكتب عنوانًا');return}
   const dur=Math.round(+v.dur);if(!(dur>=5)||!v.start||!v.date||tmn(v.start)+dur>1440){toast('تحقق من التاريخ والوقت والمدة');return}
-  const cf=conf(v.date,v.start,dur,id);if(cf.length&&!confirm('تتعارض مع: '+cf.join('، ')+'
-هل تريد المتابعة؟'))return;
+  const cf=conf(v.date,v.start,dur,id);if(cf.length&&!confirm('تتعارض مع: '+cf.join('، ')+'\nهل تريد المتابعة؟'))return;
   const o={subj:sid||null,less:lid||null,title,date:v.date,start:v.start,dur,rep:['daily','weekly'].includes(v.rep)?v.rep:'none',until:v.until&&v.until>=v.date?v.until:null,note:(v.note||'').trim()};
   if(id)Object.assign(S.sess.find(s=>s.id===id),o);else S.sess.push({id:uid(),plan:S.curPlan,...o,log:{}});PL.date=v.date;fin_()}});
 
@@ -447,15 +439,6 @@ document.addEventListener('change',e=>{const t=e.target;
  else if(t.dataset.fl){const[a,b]=t.value.split('|');T.link=a?{subj:a,less:b||null}:null;tSave();render()}});
 tRestore();
 if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
-
-const tcfg=()=>{const dis=T.run?'disabled':'';return `<div class="card"><div class="row"><b class="sp">ضبط المدة</b><span class="mu">${T.run?'أوقف المؤقت أو أعد ضبطه للتعديل':'دقائق : ثوانٍ'}</span></div>${['focus','short','long'].map(k=>{const q=dur(k);return `<div class="row" dir="rtl" style="margin-top:10px;gap:6px"><span class="sp">${MN[k]}</span><button class="btn sm g" ${dis} data-act="tadj" data-id="${k}" data-d="-60" aria-label="إنقاص دقيقة">−</button><input type="number" inputmode="numeric" min="0" max="180" ${dis} data-tm="${k}" data-u="m" value="${Math.floor(q/60)}" style="width:56px;padding:8px 4px;text-align:center" aria-label="دقائق"><b>:</b><input type="number" inputmode="numeric" min="0" max="59" ${dis} data-tm="${k}" data-u="s" value="${q%60}" style="width:56px;padding:8px 4px;text-align:center" aria-label="ثوانٍ"><button class="btn sm g" ${dis} data-act="tadj" data-id="${k}" data-d="60" aria-label="زيادة دقيقة">+</button></div>`}).join('')}<div class="mu" style="margin-top:8px">تُحفظ الإعدادات تلقائيًا. الأزرار تغيّر المدة بمقدار دقيقة، ويمكنك الكتابة يدويًا.</div></div>`};
-function setDur(k,sec){if(T.run){toast('أوقف المؤقت أولًا لتعديل المدة');render();return}
- if(sec<5){toast('أقل مدة هي 5 ثوانٍ')}sec=Math.max(5,Math.min(10800,Math.round(sec)));
- if(k===T.mode&&T.left!==dur(k)&&!confirm('سيُعاد ضبط المؤقت الحالي بالمدة الجديدة. متابعة؟')){render();return}
- T.len[k]=sec/60;cfgSave();if(k===T.mode){T.left=dur(k);T.start=0;tSave()}render()}
-document.addEventListener('click',e=>{const b=e.target.closest('[data-act="tadj"]');if(b&&!b.disabled)setDur(b.dataset.id,dur(b.dataset.id)+(+b.dataset.d))});
-document.addEventListener('change',e=>{const t=e.target;if(!t.dataset.tm)return;const k=t.dataset.tm,q=dur(k),v=Math.max(0,Math.floor(+t.value||0));
- setDur(k,t.dataset.u==='m'?Math.min(180,v)*60+q%60:Math.floor(q/60)*60+Math.min(59,v))});
 let curDay=TD();const chkDay=()=>{if(TD()!==curDay){curDay=TD();if(!$('#ov'))render()}};setInterval(chkDay,20000);document.addEventListener('visibilitychange',chkDay);
 render();
 </script>
